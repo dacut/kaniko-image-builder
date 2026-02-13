@@ -16,11 +16,8 @@ on:
         required: false
         default: 'latest'
 
-env:
-  IMAGE_NAME: kaniko-executor
-
 jobs:
-  build:
+  build-executor:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,6 +36,7 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -49,7 +47,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Amazon ECR Public
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && secrets.AWS_ACCESS_KEY_ID != ''
         uses: docker/login-action@v3
         with:
           registry: public.ecr.aws
@@ -57,15 +55,16 @@ jobs:
           password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         env:
           AWS_REGION: us-east-1
+        continue-on-error: true
 
-      - name: Extract metadata
+      - name: Extract metadata for executor
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
-            public.ecr.aws/${{ secrets.ECR_ALIAS }}/${{ env.IMAGE_NAME }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/kaniko-executor
+            ghcr.io/${{ github.repository_owner }}/kaniko-executor
+            public.ecr.aws/${{ secrets.ECR_ALIAS }}/kaniko-executor
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -74,6 +73,8 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            latest=auto
 
       - name: Determine Kaniko version
         id: kaniko-version
@@ -84,7 +85,7 @@ jobs:
             echo "version=latest" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build and push Docker image
+      - name: Build and push executor image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -92,7 +93,90 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
+          target: kaniko-executor
           build-args: |
             KANIKO_VERSION=${{ steps.kaniko-version.outputs.version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=executor
+          cache-to: type=gha,mode=max,scope=executor
+
+  build-warmer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Amazon ECR Public
+        if: github.event_name != 'pull_request' && secrets.AWS_ACCESS_KEY_ID != ''
+        uses: docker/login-action@v3
+        with:
+          registry: public.ecr.aws
+          username: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          password: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        env:
+          AWS_REGION: us-east-1
+        continue-on-error: true
+
+      - name: Extract metadata for warmer
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/kaniko-warmer
+            ghcr.io/${{ github.repository_owner }}/kaniko-warmer
+            public.ecr.aws/${{ secrets.ECR_ALIAS }}/kaniko-warmer
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            latest=auto
+
+      - name: Determine Kaniko version
+        id: kaniko-version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.kaniko_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and push warmer image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          target: kaniko-warmer
+          build-args: |
+            KANIKO_VERSION=${{ steps.kaniko-version.outputs.version }}
+          cache-from: type=gha,scope=warmer
+          cache-to: type=gha,mode=max,scope=warmer
