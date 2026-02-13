@@ -2,70 +2,90 @@
 
 Thank you for your interest in contributing to the kaniko-image-builder project!
 
-## Building Locally
+## Building Images
 
-To build the Kaniko images locally:
+Use the provided build script to build Kaniko images:
+
+```bash
+# Build the latest version
+./build.sh
+
+# Build a specific version
+./build.sh --version v1.19.0 --tag v1.19.0
+
+# Build for a specific platform
+./build.sh --version v1.19.0 --platform linux/arm64 --tag v1.19.0-arm64
+```
+
+### Build Script Options
+
+```bash
+./build.sh [OPTIONS]
+
+OPTIONS:
+    -v, --version VERSION   Kaniko version to build (tag, branch, or commit)
+    -t, --tag TAG          Tag for the built images
+    -r, --registry REG     Registry prefix for image names
+    -p, --platform PLAT    Platform to build for
+    --push                 Push images after building
+    -h, --help             Show help message
+```
+
+## Building Manually
+
+You can also build images directly with Docker:
 
 ```bash
 # Build the executor image
-docker build -t kaniko-executor:local --target kaniko-executor .
-
-# Build the warmer image
-docker build -t kaniko-warmer:local --target kaniko-warmer .
-```
-
-### Build Arguments
-
-You can specify a specific Kaniko version to build:
-
-```bash
 docker build \
   --build-arg KANIKO_VERSION=v1.19.0 \
   --target kaniko-executor \
   -t kaniko-executor:v1.19.0 \
   .
+
+# Build the warmer image
+docker build \
+  --build-arg KANIKO_VERSION=v1.19.0 \
+  --target kaniko-warmer \
+  -t kaniko-warmer:v1.19.0 \
+  .
 ```
+
+## Specifying Kaniko Versions
+
+You can build any version from the Chainguard fork:
+
+- **Specific tag**: `./build.sh --version v1.19.0`
+- **Branch**: `./build.sh --version main`
+- **Commit SHA**: `./build.sh --version abc123def456`
+- **Latest**: `./build.sh` (default)
 
 ## Testing Changes
 
-Before submitting a pull request, please:
+Before submitting a pull request:
 
 1. Verify the Dockerfile builds successfully
 2. Test the built images with example builds (see `examples/` directory)
-3. Ensure the GitHub Actions workflow syntax is valid
+3. Ensure the build script works as expected
 
 ## Updating the Kaniko Version
 
 The images are built from the Chainguard fork of Kaniko at:
 https://github.com/chainguard-forks/kaniko
 
-To update the version:
-1. Update the `KANIKO_VERSION` build argument (if needed)
-2. Test the build locally
-3. Submit a pull request with your changes
-
-## GitHub Actions Workflow
-
-The workflow builds images on:
-- Pushes to the `main` branch
-- Tag pushes (e.g., `v1.0.0`)
-- Pull requests (build only, no push)
-- Manual workflow dispatch
-
-### Testing Workflow Changes
-
-To test workflow changes:
-1. Create a pull request - this will trigger a build without pushing images
-2. Review the workflow run logs for any errors
-3. Once approved and merged, images will be pushed to registries
+To build a specific version, use the `--version` option with the build script.
 
 ## Multi-Architecture Builds
 
-Images are built for:
-- `linux/amd64`
-- `linux/arm64`
+To build for different architectures, use the `--platform` option:
 
-The GitHub Actions workflow uses Docker Buildx for multi-platform builds.
+```bash
+# Build for amd64 (default)
+./build.sh --platform linux/amd64
+
+# Build for arm64
+./build.sh --platform linux/arm64
+```
 
 ## Code of Conduct
 

@@ -4,129 +4,147 @@ Build Docker images for [Kaniko](https://github.com/GoogleContainerTools/kaniko)
 
 ## Overview
 
-This repository builds and publishes Kaniko executor and warmer images to multiple container registries:
-- Docker Hub
-- GitHub Container Registry (ghcr.io)
-- Amazon ECR Public
+This repository provides a Dockerfile and build script to create Kaniko executor and warmer images from the Chainguard fork.
 
-## Images Available
+## Quick Start
 
-Two image types are built:
+Build the latest version:
+
+```bash
+./build.sh
+```
+
+Build a specific tag:
+
+```bash
+./build.sh --version v1.19.0 --tag v1.19.0
+```
+
+Build a specific commit:
+
+```bash
+./build.sh --version abc123def --tag mycommit
+```
+
+## Build Script Usage
+
+The `build.sh` script provides a convenient way to build Kaniko images with various options:
+
+```bash
+./build.sh [OPTIONS]
+
+OPTIONS:
+    -v, --version VERSION   Kaniko version to build (tag, branch, or commit)
+                           Default: latest
+    -t, --tag TAG          Tag for the built images
+                           Default: latest
+    -r, --registry REG     Registry prefix for image names
+                           Default: local (no registry prefix)
+    -p, --platform PLAT    Platform to build for (e.g., linux/amd64, linux/arm64)
+                           Default: linux/amd64
+    --push                 Push images after building
+    -h, --help             Show this help message
+```
+
+### Examples
+
+```bash
+# Build latest version
+./build.sh
+
+# Build a specific Kaniko version with a custom tag
+./build.sh --version v1.19.0 --tag v1.19.0
+
+# Build for arm64
+./build.sh --version v1.19.0 --platform linux/arm64 --tag v1.19.0-arm64
+
+# Build and push to a registry
+./build.sh --registry ghcr.io/myuser --tag latest --push
+
+# Build a specific commit
+./build.sh --version 6f6a3bcf9a8c --tag dev-6f6a3bc
+```
+
+## Images Built
+
+The build script creates two images:
 
 ### Kaniko Executor
 The main Kaniko image for building container images.
 
+**Default name:** `kaniko-executor:latest`
+
 ### Kaniko Warmer
 A utility for pre-warming the Kaniko cache with base images.
 
-## Image Registries
+**Default name:** `kaniko-warmer:latest`
 
-The built images are available at:
+## Building Manually with Docker
 
-### Executor Images
-- **Docker Hub**: `<username>/kaniko-executor:latest`
-- **GitHub Container Registry**: `ghcr.io/dacut/kaniko-executor:latest`
-- **Amazon ECR Public**: `public.ecr.aws/<alias>/kaniko-executor:latest`
+You can also build the images directly using Docker:
 
-### Warmer Images
-- **Docker Hub**: `<username>/kaniko-warmer:latest`
-- **GitHub Container Registry**: `ghcr.io/dacut/kaniko-warmer:latest`
-- **Amazon ECR Public**: `public.ecr.aws/<alias>/kaniko-warmer:latest`
+```bash
+# Build executor
+docker build \
+  --build-arg KANIKO_VERSION=v1.19.0 \
+  --target kaniko-executor \
+  -t kaniko-executor:v1.19.0 \
+  .
 
-## Usage
+# Build warmer
+docker build \
+  --build-arg KANIKO_VERSION=v1.19.0 \
+  --target kaniko-warmer \
+  -t kaniko-warmer:v1.19.0 \
+  .
+```
+
+### Build Arguments
+
+- `KANIKO_VERSION`: The tag, branch, or commit SHA to build from the Chainguard fork (default: `latest`)
+
+## Using the Built Images
 
 ### Using the Kaniko Executor
 
 ```bash
-# Pull from Docker Hub
-docker pull <username>/kaniko-executor:latest
-
-# Pull from GitHub Container Registry
-docker pull ghcr.io/dacut/kaniko-executor:latest
-
-# Pull from Amazon ECR Public
-docker pull public.ecr.aws/<alias>/kaniko-executor:latest
-```
-
-### Building Images with Kaniko
-
-```bash
-docker run -v $(pwd):/workspace \
-  ghcr.io/dacut/kaniko-executor:latest \
+# Build an image without pushing
+docker run -v "$(pwd)":/workspace \
+  kaniko-executor:latest \
   --dockerfile=/workspace/Dockerfile \
   --context=/workspace \
-  --destination=myrepo/myimage:latest
+  --destination=my-image:latest \
+  --no-push
+
+# Build and push to a registry
+docker run -v "$(pwd)":/workspace \
+  -v ~/.docker/config.json:/kaniko/.docker/config.json:ro \
+  kaniko-executor:latest \
+  --dockerfile=/workspace/Dockerfile \
+  --context=/workspace \
+  --destination=myregistry/my-image:latest
 ```
 
 ### Using the Kaniko Warmer
 
 ```bash
 # Pre-warm cache with a base image
-docker run -v $(pwd)/cache:/cache \
-  ghcr.io/dacut/kaniko-warmer:latest \
+docker run -v "$(pwd)/cache":/cache \
+  kaniko-warmer:latest \
   --cache-dir=/cache \
   --image=alpine:latest
 ```
 
-## Building Locally
-
-To build the Kaniko images locally:
-
-```bash
-# Build executor
-docker build -t kaniko-executor:local --target kaniko-executor .
-
-# Build warmer
-docker build -t kaniko-warmer:local --target kaniko-warmer .
-```
-
-To build a specific version of Kaniko:
-
-```bash
-docker build -t kaniko-executor:v1.19.0 \
-  --build-arg KANIKO_VERSION=v1.19.0 \
-  --target kaniko-executor .
-```
-
 ## Features
 
-- **Multi-architecture support**: Builds for `linux/amd64` and `linux/arm64`
+- **Multi-architecture support**: Build for `linux/amd64` or `linux/arm64`
 - **Credential helpers**: Includes support for GCR, ECR, and ACR
 - **Minimal footprint**: Uses scratch-based images for security and size
-- **Flexible versioning**: Build any version from the Chainguard fork
+- **Flexible versioning**: Build any version (tag, branch, or commit) from the Chainguard fork
 
-## GitHub Actions Workflow
+## Examples
 
-The repository includes a GitHub Actions workflow that automatically builds and publishes images:
-
-- **On push to main**: Builds and pushes images tagged as `latest`
-- **On tag push (v*)**: Builds and pushes versioned images
-- **On pull request**: Builds images without pushing (for testing)
-- **Manual trigger**: Allows building specific Kaniko versions
-
-### Required Secrets
-
-Configure the following secrets in your GitHub repository:
-
-#### Docker Hub (Optional)
-- `DOCKERHUB_USERNAME`: Your Docker Hub username
-- `DOCKERHUB_TOKEN`: Docker Hub access token
-
-#### Amazon ECR Public (Optional)
-- `AWS_ACCESS_KEY_ID`: AWS access key with ECR public permissions
-- `AWS_SECRET_ACCESS_KEY`: AWS secret access key
-- `ECR_ALIAS`: Your ECR public registry alias
-
-#### GitHub Container Registry
-- Uses the built-in `GITHUB_TOKEN` (no additional configuration needed)
-
-**Note**: The workflow will continue even if some registries are not configured, ensuring at least GitHub Container Registry publishes succeed.
-
-## Multi-Architecture Support
-
-The workflow builds images for multiple architectures:
-- `linux/amd64`
-- `linux/arm64`
+See the `examples/` directory for sample usage with Docker and Kubernetes.
 
 ## License
 
