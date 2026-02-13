@@ -47,7 +47,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Amazon ECR Public
-        if: github.event_name != 'pull_request' && secrets.AWS_ACCESS_KEY_ID != ''
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: public.ecr.aws
@@ -129,7 +129,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Amazon ECR Public
-        if: github.event_name != 'pull_request' && secrets.AWS_ACCESS_KEY_ID != ''
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: public.ecr.aws

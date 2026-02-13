@@ -10,7 +10,7 @@ echo "Building image using Kaniko..."
 echo "Executor image: $EXECUTOR_IMAGE"
 echo "Destination: $DESTINATION"
 
-docker run --rm -v $(pwd):/workspace \
+docker run --rm -v "$(pwd)":/workspace \
   "$EXECUTOR_IMAGE" \
   --dockerfile=/workspace/Dockerfile.example \
   --context=/workspace \
