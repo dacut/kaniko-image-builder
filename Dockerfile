@@ -22,6 +22,7 @@ ENV GOBIN=/usr/local/bin
 RUN mkdir -p /kaniko/.docker
 
 # Install credential helpers
+# Note: Versions are controlled by the Kaniko repository's go.mod
 RUN go install github.com/GoogleCloudPlatform/docker-credential-gcr/v2 && \
     go install github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login && \
     go install github.com/chrismellard/docker-credential-acr-env
